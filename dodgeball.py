@@ -1,4 +1,5 @@
 import sys
+import time
 from g_python.gextension import Extension
 from g_python.hmessage import Direction
 
@@ -16,6 +17,7 @@ allowed_values = []
 dodgeball = False
 x = 0
 y = 0
+ms = 0.0
 
 def coords(coord):
     global x, y, dodgeball
@@ -28,10 +30,11 @@ def dice(dice):
     diceid, num = dice.packet.read('ii')
     if num in allowed_values:
         print(diceid, num)
+        time.sleep(ms)
         ext.send_to_server('{out:MoveAvatar}{i:' + str(x) + '}{i:' + str(y) + '}')
 
 def message(message):
-    global allowed_values, dodgeball
+    global allowed_values, dodgeball, x, y, ms
     (text, color, index) = message.packet.read('sii')
     if dodgeball is not False and text.lower().startswith(':num '):
         try:
@@ -53,6 +56,8 @@ def message(message):
     elif text.lower().startswith(':dballoff'):
         message.is_blocked = True
         dodgeball = False
+        x = 0
+        y = 0
         ext.send_to_client('{in:Whisper}{i:-1}{s:"Dodgeball Bot is Off"}{i:0}{i:34}{i:0}{i:-1}')
 
     elif text.lower().startswith(':numreset'):
@@ -60,10 +65,23 @@ def message(message):
         message.is_blocked = True
         ext.send_to_client('{in:Whisper}{i:-1}{s:"Dice numbers are resetted"}{i:0}{i:34}{i:0}{i:-1}')
 
+    elif dodgeball and text.lower().startswith(':dms'):
+        message.is_blocked = True
+        words = text.split()
+        try:
+            ms = float(words[1])
+        except ValueError:
+            ext.send_to_client('{in:Whisper}{i:-1}{s:"Invalid delay time. Please use a number."}{i:0}{i:34}{i:0}{i:-1}')
+            return
+        if ms < 0:
+            ext.send_to_client('{in:Whisper}{i:-1}{s:"Delay time must be greater than zero."}{i:0}{i:34}{i:0}{i:-1}')
+            return
+        ext.send_to_client('{in:Whisper}{i:-1}{s:"Delay time set to ' + str(ms) + ' seconds."}{i:0}{i:34}{i:0}{i:-1}')
+
     elif text.lower().startswith(':dballcmd'):
         message.is_blocked = True
-        ext.send_to_client('{in:Whisper}{i:-1}{s:"":dballon" turns the bot on\n":dballoff" turns the bot off\nPress "alt" and move the furni where you wanna walk\nTo set dice number type :num "number" to add, you can add multiple numbers (1-6)\n:numreset to reset all numbers."}{i:0}{i:34}{i:0}{i:-1}')
+        ext.send_to_client('{in:Whisper}{i:-1}{s:":dballon turns the bot on\n:dballoff turns the bot off\n:dms "number" to set delay\nPress "alt" and move the furni where you wanna walk\nTo set dice number type :num "number" to add, you can add multiple numbers (1-6)\n:numreset to reset all numbers."}{i:0}{i:34}{i:0}{i:-1}')
 
-ext.intercept(Direction.TO_CLIENT, dice, 'DiceValue')
+ext.intercept(Direction.TO_CLIENT, dice, 'DiceValue', mode='async')
 ext.intercept(Direction.TO_SERVER, message, 'Chat')
 ext.intercept(Direction.TO_SERVER, coords, 'MoveObject')
